@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhishGuard AI - Phishing Detection</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+  .wrap{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+  h1{font-size:26px;margin:10px 0 4px}
+  .sub{color:#94a3b8;font-size:14px;margin-bottom:18px}
+  textarea{width:100%;height:150px;padding:12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:15px;resize:vertical}
+  .row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  button{padding:12px 18px;border:0;border-radius:10px;font-size:15px;font-weight:bold;cursor:pointer}
+  #go{background:#3b82f6;color:#fff;flex:1}
+  #go:disabled{opacity:.6}
+  .ex{background:#334155;color:#e2e8f0;font-size:13px;font-weight:normal;padding:8px 12px}
+  #out{margin-top:20px}
+  .card{background:#1e293b;border-radius:12px;padding:16px;border-left:6px solid #64748b}
+  .PHISHING{border-color:#ef4444}.SUSPICIOUS{border-color:#f59e0b}.SAFE{border-color:#22c55e}
+  .verdict{font-size:22px;font-weight:bold}
+  .PHISHING .verdict{color:#ef4444}.SUSPICIOUS .verdict{color:#f59e0b}.SAFE .verdict{color:#22c55e}
+  .bar{height:10px;background:#334155;border-radius:6px;margin:10px 0;overflow:hidden}
+  .fill{height:100%;background:#3b82f6;width:0}
+  h3{margin:14px 0 6px;font-size:15px}
+  ul{margin:0;padding-left:20px;font-size:14px;line-height:1.5}
+  .err{background:#7f1d1d;padding:12px;border-radius:10px;font-size:14px}
+  .foot{margin-top:24px;font-size:12px;color:#64748b;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PhishGuard AI</h1>
+  <div class="sub">Paste a suspicious message, email or link. Powered by Google Gemini.</div>
+  <textarea id="inp" placeholder="Paste the suspicious SMS, email text or URL here..."></textarea>
+  <div class="row">
+    <button id="go">Check Now</button>
+  </div>
+  <div class="row">
+    <button class="ex" id="e1">Example: Bank scam</button>
+    <button class="ex" id="e2">Example: Safe message</button>
+  </div>
+  <div id="out"></div>
+  <div class="foot">Never share OTP, PIN or passwords. Built for HackNova Bhopal 2K26 (HN05).</div>
+</div>
+<script>
+  var inp = document.getElementById("inp");
+  var out = document.getElementById("out");
+  var go = document.getElementById("go");
+
+  document.getElementById("e1").onclick = function () {
+    inp.value = "URGENT: Your SBI account will be blocked today! Update your KYC now at http://sbi-kyc-update.xyz/login and enter your OTP to avoid suspension.";
+  };
+  document.getElementById("e2").onclick = function () {
+    inp.value = "Hi, this is a reminder that our team meeting is tomorrow at 11 AM in the conference room. See you there!";
+  };
+
+  function add(parent, tag, text, cls) {
+    var el = document.createElement(tag);
+    el.textContent = text;
+    if (cls) el.className = cls;
+    parent.appendChild(el);
+    return el;
+  }
+
+  function list(card, title, items) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    add(card, "h3", title);
+    var ul = document.createElement("ul");
+    items.forEach(function (i) { add(ul, "li", String(i)); });
+    card.appendChild(ul);
+  }
+
+  go.onclick = async function () {
+    var text = inp.value.trim();
+    out.innerHTML = "";
+    if (!text) { add(out, "div", "Please paste a message or link first.", "err"); return; }
+    go.disabled = true;
+    go.textContent = "Analyzing...";
+    try {
+      var r = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text })
+      });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Request failed");
+
+      var verdict = ["PHISHING", "SUSPICIOUS", "SAFE"].indexOf(data.verdict) >= 0 ? data.verdict : "SUSPICIOUS";
+      var score = Math.max(0, Math.min(100, Number(data.riskScore) || 0));
+
+      var card = add(out, "div", "", "card " + verdict);
+      add(card, "div", verdict, "verdict");
+      add(card, "div", "Risk score: " + score + "/100");
+      var bar = add(card, "div", "", "bar");
+      var fill = add(bar, "div", "", "fill");
+      fill.style.width = score + "%";
+      add(card, "p", String(data.summary || ""));
+      list(card, "Red flags", data.redFlags);
+      list(card, "What you should do", data.advice);
+    } catch (e) {
+      add(out, "div", "Error: " + e.message, "err");
+    }
+    go.disabled = false;
+    go.textContent = "Check Now";
+  };
+</script>
+</body>
+</html>
