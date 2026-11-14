@@ -1,4 +1,4 @@
-const MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"];
+const MODELS = ["gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"];
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -25,24 +25,28 @@ module.exports = async function handler(req, res) {
     '{"verdict":"PHISHING" or "SUSPICIOUS" or "SAFE","riskScore":number 0-100,' +
     '"summary":"one or two simple sentences","redFlags":["short reason", "..."],' +
     '"advice":["short action tip", "..."]}. ' +
-    "Use simple English. Give 2 to 5 items in redFlags (empty list if SAFE) and 2 to 4 items in advice.\n\n" +
+    "Use simple English. Keep every item very short. Give 2 to 4 items in redFlags (empty list if SAFE) and 2 to 3 items in advice.\n\n" +
     "-----BEGIN CONTENT-----\n" + text + "\n-----END CONTENT-----";
 
   let lastError = "Unknown error";
   for (const model of MODELS) {
+    const controller = new AbortController();
+    const timer = setTimeout(function () { controller.abort(); }, 12000);
     try {
       const r = await fetch(
         "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
         {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+            generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 700 }
           })
         }
       );
       const data = await r.json();
+      clearTimeout(timer);
       if (!r.ok) {
         lastError = (data.error && data.error.message) || "HTTP " + r.status;
         continue;
@@ -53,7 +57,8 @@ module.exports = async function handler(req, res) {
       const result = JSON.parse(clean);
       return res.status(200).json(result);
     } catch (e) {
-      lastError = e.message;
+      clearTimeout(timer);
+      lastError = e.name === "AbortError" ? "Model " + model + " was too slow" : e.message;
     }
   }
   return res.status(502).json({ error: "AI request failed: " + lastError });
